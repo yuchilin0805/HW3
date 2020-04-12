@@ -27,17 +27,23 @@ Serial pc(USBTX, USBRX);
 DigitalOut led1(LED1);
 int m_addr = FXOS8700CQ_SLAVE_ADDR1;
 EventQueue queue(32 * EVENTS_EVENT_SIZE);
+
 InterruptIn sw2(SW2);
+
 Thread t;
 Ticker ledt;
+float x[100],y[100],z[100],tilt[100];
 void logger();
 void blink();
+
 void FXOS8700CQ_readRegs(int addr, uint8_t * data, int len);
 void FXOS8700CQ_writeRegs(uint8_t * data, int len);
 void Trig_tilt_event_log(){
     ledt.attach(&blink,0.5);
     queue.call(logger);
+    
 }
+
 
 void blink(){
     led1=!led1;
@@ -46,8 +52,9 @@ int main() {
 
     pc.baud(115200);
 
-    
+    led1=1;
     sw2.rise(Trig_tilt_event_log);
+    
     t.start(callback(&queue, &EventQueue::dispatch_forever));
     while(1){};
     
@@ -69,6 +76,8 @@ void logger(){
     float angle;
     float init_angle;
     int init_flag=0;
+    
+    
 
     // Enable the FXOS8700Q
     FXOS8700CQ_readRegs( FXOS8700Q_CTRL_REG1, &data[1], 1);
@@ -81,8 +90,8 @@ void logger(){
 
     //pc.printf("Here is %x\r\n", who_am_i);
     
-    while (true) {
-
+    for(int i=0;i<100;i++) {
+        
         FXOS8700CQ_readRegs(FXOS8700Q_OUT_X_MSB, res, 6);
 
         acc16 = (res[0] << 6) | (res[1] >> 2);
@@ -100,14 +109,33 @@ void logger(){
             acc16 -= UINT14_MAX;
         t[2] = ((float)acc16) / 4096.0f;
 
-       /* printf("FXOS8700Q ACC: X=%1.4f(%x%x) Y=%1.4f(%x%x) Z=%1.4f(%x%x)\r\n",\
-            t[0], res[0], res[1],\
-            t[1], res[2], res[3],\
-            t[2], res[4], res[5]\
-        );*/
+        x[i]=t[0];
+        y[i]=t[1];
+        z[i]=t[2];
         //float tmp=t[2]/sqrt(t[0]*t[0]+t[1]*t[1]);
+        
+        if(!init_flag){
+            init_angle=atan(t[2]/sqrt(t[0]*t[0]+t[1]*t[1]));
+            init_flag=1;
+        }
         angle = atan(t[2]/sqrt(t[0]*t[0]+t[1]*t[1]));
-        printf("%1.3f\r\n",angle*180/3.14159265358);
-        wait(1.0);
+        //printf("%1.3f\r\n",(init_angle-angle)*180/3.14159265358);
+        if((init_angle-angle)*180/3.14159265358>45){
+            tilt[i]=1;
+        }
+        else
+            tilt[i]=0;
+        /*pc.printf("x%1.4f\n",t[0]);
+        pc.printf("y%1.4f\n",t[1]);
+        pc.printf("z%1.4f\n",t[2]);
+        pc.printf("t%1.4f\n",tilt[i]);*/
+        wait(0.1);
+    }
+    ledt.detach();
+    for(int i=0;i<100;i++){
+        pc.printf("x%1.3f\n",x[i]);
+        pc.printf("y%1.3f\n",y[i]);
+        pc.printf("z%1.3f\n",z[i]);
+        pc.printf("t%1.3f\n",tilt[i]);
     }
 }
